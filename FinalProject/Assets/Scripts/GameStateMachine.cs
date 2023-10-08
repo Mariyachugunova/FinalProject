@@ -49,7 +49,7 @@ public class GameStateMachine : MonoBehaviour
     }
 
     private string _sceneName;
-    private void LoadSceneStart(string sceneName)
+    public void LoadSceneStart(string sceneName)
     {
         _sceneName = sceneName;
  
@@ -98,5 +98,8 @@ public class GameStateMachine : MonoBehaviour
             yield return null;
         }
     }
-    
+    private void OnDestroy()
+    {
+        DOTween.KillAll();
+    }
 }

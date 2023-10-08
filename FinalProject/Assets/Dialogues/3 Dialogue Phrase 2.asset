@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: da71303de4ad7994191cc77f79cc98e9, type: 3}
+  m_Name: 3 Dialogue Phrase 2
+  m_EditorClassIdentifier: 
+  _characterName: "\u041E\u043B\u0435\u043D\u044C"
+  _illustrationImage: {fileID: 0}
+  _phrase: "\u041A\u0430\u043A\u043E\u0439?"
+  _mental: 0
+  _addSelection: 0
+  _dialogFork: {fileID: 0}
+  _reaction: 
+  _cardData: {fileID: 0}

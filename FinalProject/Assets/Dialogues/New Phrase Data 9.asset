@@ -19,5 +19,5 @@ MonoBehaviour:
   _mental: 1
   _addSelection: 0
   _dialogFork: {fileID: 0}
-  _reaction: Event1
+  _reaction: Cutscene1
   _cardData: {fileID: 0}

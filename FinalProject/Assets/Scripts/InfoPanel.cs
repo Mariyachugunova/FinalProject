@@ -1,6 +1,5 @@
 using DG.Tweening;
 using Sirenix.OdinInspector;
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -9,7 +8,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using Zenject;
 
-public class InfoPanel : MonoBehaviour
+public class InfoPanel : MonoBehaviour,IPointerClickHandler
 {
 
     [SerializeField] private Transform _leftPack;
@@ -20,7 +19,7 @@ public class InfoPanel : MonoBehaviour
     [SerializeField] private Ease _ease;
     [SerializeField] private GameObject _closeTrigger;
     [SerializeField] Card cardPrefab;
-    private float _speed1 = 350;
+    private float _speed1 = 800;
     private float _speed2 = 2500;
     private float _speedOfGrowth = 3;
     private float _cardWidht = 256;
@@ -28,11 +27,17 @@ public class InfoPanel : MonoBehaviour
     private List<RaycastResult> _raycastResult;
     private float _space = 12;
     private float _spaceCenter = 12;
-    private Transform _card;
+    private Card _card;
     private float _getCartDuration = 0.4f;
-    private Transform LastCardLeft { get { return _leftPack.GetChild(_leftPack.childCount - 1); } }
-    private Transform FirstCardRight => _rightPack.GetChild(_rightPack.childCount - 1);
+    private Transform LastCardLeft { get { return _leftPack.childCount > 0 ? _leftPack.GetChild(_leftPack.childCount - 1):null; } }
+    private Transform FirstCardRight => _rightPack.childCount > 0? _rightPack.GetChild(_rightPack.childCount - 1):null;
+    private bool _newCard;
+    public bool NewCard => _newCard;
+    private float _smalScale = 0.4f;
     private DialoguePanel _dialoguePanel;
+    public bool Collapsed => Mathf.Abs(transform.localScale.x - _smalScale) < 0.001;
+    public bool Expanded => Mathf.Abs(transform.localScale.x - 1) < 0.001;
+    public int _selectedCardNum = -1;
     [Inject]
     private void Construct(DialoguePanel dialoguePanel)
     {
@@ -60,13 +65,40 @@ public class InfoPanel : MonoBehaviour
             return cards;
         }
     }
+    public List<Card> AllOpenCards
+    {
+        get
+        {
+            List<Card> cards = new();
+            cards.Clear();
+
+            if (LastCardLeft) cards.Add(LastCardLeft.GetComponentInChildren<Card>());
+            
+            for(int i = 0; i < _centerPack.childCount; i++)
+            {
+                cards.Add(_centerPack.GetChild(i).GetComponentInChildren<Card>());
+            }
+            if (FirstCardRight) cards.Add(FirstCardRight.GetComponentInChildren<Card>());
+            
+            return cards;
+        }
+    }
+
     void Start()
     {
         gameObject.SetActive(false);
         gameObject.SetActive(true);
         _pointerData = new PointerEventData(EventSystem.current);
         _raycastResult = new List<RaycastResult>();
-        Fold();
+        transform.localScale = Vector3.one * _smalScale;
+        _leftToRight.sizeDelta = new Vector2(_leftPack.childCount * _space + _cardWidht, _leftToRight.rect.height);
+        var list = AllCards;
+        foreach(var item in list)
+        {
+            item.SetDefaultState();
+        }
+
+
     }
 
 
@@ -131,7 +163,7 @@ public class InfoPanel : MonoBehaviour
 
         bool hitLeft = false;
         bool hitRight = false;
-        _raycastResult.ForEach((result) => {
+        _raycastResult.ForEach(result => {
             if(result.gameObject == _leftToRight.gameObject) hitLeft = true;
             if(result.gameObject == _rightToLeft.gameObject) hitRight = true;
         });
@@ -156,6 +188,7 @@ public class InfoPanel : MonoBehaviour
 
     public void Fold()
     {
+        _IsTweening = true;
         if(_centerPack.childCount > 0)
         {
             if(_rightPack.childCount > 0)
@@ -164,14 +197,18 @@ public class InfoPanel : MonoBehaviour
             }
             float x = _leftPack.position.x + _leftPack.childCount * _space;
             _centerPack.DOMoveX(x, _speed2).SetSpeedBased().SetEase(_ease).onComplete = FoldEnd;
-            transform.DOScale(0.4f, _speedOfGrowth).SetSpeedBased().SetEase(_ease);
+            transform.DOScale(_smalScale, _speedOfGrowth).SetSpeedBased().SetEase(_ease);
         }
         else
         {
             DropLeft();
             _leftToRight.sizeDelta = new Vector2(_leftPack.childCount * _space + _cardWidht, _leftToRight.rect.height);
-            transform.DOScale(0.4f, _speedOfGrowth).SetSpeedBased().SetEase(_ease);
+            transform.DOScale(_smalScale, _speedOfGrowth).SetSpeedBased().SetEase(_ease);
             _closeTrigger.gameObject.SetActive(false);
+            GetCard();
+            _IsTweening = false;
+            
+
         }
 
     }
@@ -183,12 +220,19 @@ public class InfoPanel : MonoBehaviour
         Fold();
     }
 
+
+    private bool _IsTweening;
     [Button]
+
+   
     public void Growth()
     {
-        if(!DOTween.IsTweening(transform))
+    
+        if(!DOTween.IsTweening(transform) && !_IsTweening && AllCards.Count > 0)
+        {
+            _IsTweening = true;
             transform.DOScale(1, _speedOfGrowth).SetSpeedBased().SetEase(_ease).onComplete = Put;
-
+        }
     }
 
     [Button]
@@ -202,9 +246,20 @@ public class InfoPanel : MonoBehaviour
             {
                 PutLastLeftCardAtCenter();
                 _centerPack.DOMoveX(LastCardLeft.position.x + _cardWidht + _spaceCenter, _speed2).SetSpeedBased().SetEase(_ease).onComplete = PutEnd;
+                
+            }
+            else
+            {
+                _IsTweening = false;
                 _closeTrigger.gameObject.SetActive(true);
             }
         }
+        else
+        {
+            _IsTweening = false;
+            _closeTrigger.gameObject.SetActive(true);
+        }
+
 
     }
 
@@ -221,7 +276,6 @@ public class InfoPanel : MonoBehaviour
     [Button]
     private void PutLastLeftCardAtCenter()
     {
-
         _centerPack.position = LastCardLeft.position;
         LastCardLeft.SetParent(_centerPack);
         _centerPack.GetChild(_centerPack.childCount - 1).SetAsFirstSibling();
@@ -244,7 +298,7 @@ public class InfoPanel : MonoBehaviour
         {
             if(allCards[i].Id == card.Id)
             {
-                if(card.Answer)
+                if(card.Answer && allCards[i].GetComponentInChildren<Text>().text != card.TextContent)
                 {
                     InstantiateAnswerCard(allCards[i], card, position);
                 }
@@ -263,13 +317,12 @@ public class InfoPanel : MonoBehaviour
     }
     void InstantiateCard(CardData cardData, Vector2 position)
     {
-        Card card = Instantiate(cardPrefab, transform.parent);
-        card.SetData(cardData);
-        _card = card.transform;
-        card.UnFade();
-        (card.transform as RectTransform).anchoredPosition = position;
+        _card = Instantiate(cardPrefab, transform.parent);
+        _card.SetData(cardData);
+        (_card.transform as RectTransform).anchoredPosition = position;
         _leftToRight.sizeDelta = new Vector2(_leftPack.childCount * _space + _cardWidht, _leftToRight.rect.height);
-
+        _card.UnFade();
+        _newCard = true;
     }
 
     void InstantiateAnswerCard(Card card, CardData cardData, Vector2 position)
@@ -279,28 +332,46 @@ public class InfoPanel : MonoBehaviour
         newcard.transform.localScale = new Vector2(0.4f, 0.4f);
         newcard.transform.DOMove(position, 1);
         newcard.transform.DOScale(1, 1); 
-        _card = newcard.transform;
+        _card = newcard;
         Destroy(card.gameObject);
+        _newCard = true;
     }
 
+    public void GetNewCard()
+    {
+ 
+        if(_card != null)
+        { 
+            if(_card.AnswerData != null)
+            {
+                _card.Turn();
+            }
+            else
+            {
+                 Fold();
+            }
 
+         }
+        
+    }
     [Button]
-    public void GetCard()
+    private void GetCard()
     {
         if(_card != null)
-        {        
-            _card.DOScale(0.4f, _getCartDuration).SetEase(_ease);
-            _card.DOMove(LastCardLeft.position, _getCartDuration).SetEase(_ease).onComplete = PutCardInPack;
-        
+        {
+            _card.DOComplete();
+            _card.transform.DOScale(0.4f, _getCartDuration).SetEase(_ease);
+            _card.transform.DOMove(LastCardLeft.position, _getCartDuration).SetEase(_ease).onComplete = PutCardInPack; 
         }
     }
    
 
     private void PutCardInPack()
     {
-        _card.SetParent(_leftPack);
+        _card.transform.SetParent(_leftPack);
         _card = null;
         _dialoguePanel.CurrentDialog.NextPhrase();
+        _newCard = false;
     }
 
     [Button]
@@ -335,11 +406,112 @@ public class InfoPanel : MonoBehaviour
         layoutGrope.spacing = _spaceCenter;
     }
 
-    [Button]
-
-    public void Show()
+    public void OnPointerClick(PointerEventData eventData)
     {
+       var raycastResults = Utils.Raycast();
+        bool dialog = false;
+        bool close = false;
+        foreach(var item in raycastResults)
+        {
+            if(item.gameObject == _closeTrigger) close = true;
+            if(item.gameObject.GetComponent<Dialogue>()) dialog = true;
+        }
 
+        if(dialog)
+        {
+            _dialoguePanel.CurrentDialog.DialogueProcess();
+
+        }
+        else if(close)
+        {
+
+            Collaps();
+        }
+    }
+
+    public void Collaps()
+    { 
+        if(_selectedCardNum > -1 && _selectedCardNum < AllOpenCards.Count) AllOpenCards[_selectedCardNum].SetDefaultState();
+        _selectedCardNum = -1;
+        Fold();
+        _closeTrigger.SetActive(false);
+        _dialoguePanel.Close();
+      
+    }
+    public void QPerformed()
+    {
+        if(!_IsTweening)
+        {
+            if(Collapsed)
+            {
+                Growth();
+            }
+            else if (Expanded)
+            {
+                Collaps();
+            }
+        }
+
+    }
+
+    public void SelectLeftCard()
+    {
+        CheckMouseSelection();
+        if(_selectedCardNum == -1)
+        {
+            _selectedCardNum = AllOpenCards.Count - 1;
+            
+        }
+        else
+        {
+            _selectedCardNum--;
+
+            if(_selectedCardNum < 0)
+            {
+                _selectedCardNum = 0;
+                MoveRight();
+            }
+        }
+        AllOpenCards[_selectedCardNum].Select();
+      
+
+    }
+
+    public void SelectRightCard()
+    {
+        CheckMouseSelection();
+        if(_selectedCardNum == -1)
+        { 
+            _selectedCardNum = 0;
+            
+        }
+        else
+        {
+            _selectedCardNum++;
+            if(_selectedCardNum > AllOpenCards.Count - 1)
+            {
+                MoveLeft();
+                _selectedCardNum = AllOpenCards.Count - 1;
+            }
+        }
+        AllOpenCards[_selectedCardNum].Select();
+       
+    }
+    private void CheckMouseSelection()
+    {
+        if(InteractiveGUIElement._selectedElement is Card)
+        {
+
+            for(int i = 0; i < AllOpenCards.Count; i++)
+            {
+                if(AllOpenCards[i]  == InteractiveGUIElement._selectedElement as Card)
+                {
+                
+                    _selectedCardNum = i;
+                }
+            }
+            
+        }
     }
 
 }

@@ -1,15 +1,14 @@
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using System;
-using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.EventSystems;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using Zenject;
 
-public class Card : MonoBehaviour, IPointerClickHandler
+public class Card : InteractiveGUIElement, IPointerClickHandler, IPointerEnterHandler, IPointerExitHandler, IRunable
 {
 
     private int _id;
@@ -19,61 +18,83 @@ public class Card : MonoBehaviour, IPointerClickHandler
     [SerializeField] Text _text;
     [SerializeField] Image _illustrationImage;
     [SerializeField] private Dictionary<string, DialogueData> _dialogs;
-
+    private CardData _cardData;
+    public CardData AnswerData => _cardData;
+    public bool Qwestion => AnswerData != null;
     private static CharacterList _charactersList;
     private static InfoPanel _infoPanel;
     private DialoguePanel _dialoguePanel;
-    private CardData _cardData;
+    private Character _playerCharacter;
+    private InputController _inputController;
     public int MyProperty { get; set; }
 
     [Inject]
-    private void Construct(CharacterList characterList, InfoPanel infoPanel,DialoguePanel dialoguePanel)
+    private void Construct(CharacterList characterList, InfoPanel infoPanel,DialoguePanel dialoguePanel, Character playerCharacter, InputController inputController)
     {
         _charactersList = characterList;
         _infoPanel = infoPanel;
         _dialoguePanel = dialoguePanel;
+        _playerCharacter = playerCharacter;
+        _inputController = inputController;
     }
-
-    private void Awake()
-    {
-
-    }
+   
     public void UnFade()
     {
-        _BackgroundImage.color = new Color(1, 1, 1, 0);
-        _BackgroundImage.DOFade(1f, 1f);
-        _illustrationImage.color = new Color(1, 1, 1, 0);
-        _illustrationImage.DOFade(1f, 1f);
-
-
+        RayCast();
+        _BackgroundImage.color = new Color(_BackgroundImage.color.r, _BackgroundImage.color.g, _BackgroundImage.color.b, 0);
+        _BackgroundImage.DOFade(1f,6f);
+        _illustrationImage.color = new Color(_illustrationImage.color.r, _illustrationImage.color.g, _illustrationImage.color.b, 0);
+        _illustrationImage.DOFade(1f, 6f);
+       
     }
 
-    public void OnPointerClick(PointerEventData eventData)
+    public override void OnPointerClick(PointerEventData eventData)
     {
-    
+        base.OnPointerClick(eventData);
+        _infoPanel.GetNewCard();
 
-        if(_cardData == null)
-        {
-            _infoPanel.GetCard();
-        }
-        else
-        {
-            Turn();
-            
-        }
-
-        if(transform.parent?.parent?.name == "InfoPanel")
+        if(inPack())
         {
             if(_dialogs != null)
             {
-                foreach(var item in _dialogs)
+                string key = _dialoguePanel.CurrentDialog.CurrentInterlocutor;
+                if(_dialogs.Keys.Contains(key))
                 {
-                    print(item.Key + " " + item.Value);
+
+                    if(_dialoguePanel.CurrentDialog.CurrentDialogueData != _dialogs[key])
+                    {
+                        _dialoguePanel.CurrentDialog.Activate(_dialogs[key]);
+                    }
+                    else
+                    {
+                        //if(!_charactersList.CharactersList[_dialoguePanel.CurrentDialog.CurrentInterlocutor]._isAnimationPlaing)
+                        {
+                            if(!_dialoguePanel.gameObject.activeSelf)
+                            {
+                                _dialoguePanel.CurrentDialog.Activate(_dialoguePanel.CurrentDialog.CurrentDialogueData);
+
+                            }
+                            else
+                            {
+                                _dialoguePanel.CurrentDialog.DialogueProcess();
+                            }
+                        }
+
+                    }
                 }
 
-                //_dialoguePanel.CurrentDialog.Activate()
+
+            }
+            else
+            {
+                _dialoguePanel.Close();
             }
         }
+    }
+
+    private bool inPack()
+    {
+        return transform.parent?.parent?.name == "InfoPanel";
     }
 
     public void Turn()
@@ -101,6 +122,27 @@ public class Card : MonoBehaviour, IPointerClickHandler
     {
         _cardData = card;
     }
+    public void DOComplete()
+    {
+        transform.DOComplete();
+        _BackgroundImage.DOComplete();
+        _illustrationImage.DOComplete();
+    }
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        //transform.parent.GetComponent<DialoguePanel>()?.DeselectAll();
+        if (!_inputController.KeyboardControl) Select();
 
+    }
 
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        Deselect();
+        _infoPanel._selectedCardNum = -1;
+    }
+
+    public void Run()
+    {
+       if (_selectedElement == this) OnPointerClick(new PointerEventData(EventSystem.current));
+    }
 }

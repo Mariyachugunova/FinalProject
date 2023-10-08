@@ -15,6 +15,8 @@ public class SceneInstaller : MonoInstaller
     [SerializeField] private InputController _inputController;
     [SerializeField] private Path _path;
     [SerializeField] private CameraTurn _cameraTurn;
+    [SerializeField] private CutsceneManager _cutsceneManager;
+
     public override void InstallBindings()
     {
         Container.Bind<MovementController>().FromInstance(_playerMovementController).AsSingle().NonLazy();
@@ -50,6 +52,14 @@ public class SceneInstaller : MonoInstaller
 
         Container.Bind<CameraTurn>().FromInstance(_cameraTurn).AsSingle().NonLazy();
         Container.QueueForInject(_cameraTurn);
+
+        var playerCharacter = _playerMovementController.GetComponent<Character>();
+
+        Container.Bind<Character>().FromInstance(playerCharacter).AsSingle().NonLazy();
+        Container.QueueForInject(playerCharacter);
+
+        Container.Bind<CutsceneManager>().FromInstance(_cutsceneManager).AsSingle().NonLazy();
+        Container.QueueForInject(_cutsceneManager);
 
 
     }

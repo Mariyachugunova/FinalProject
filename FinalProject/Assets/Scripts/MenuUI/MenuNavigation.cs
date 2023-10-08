@@ -41,7 +41,6 @@ public class MenuNavigation : MonoBehaviour
     {
         _selectedButton = EventSystem.current?.currentSelectedGameObject?.GetComponent<Selectable>();
         (_selectedButton as Button)?.onClick?.Invoke();
-        print(_selectedButton);
     }
     private void Down()
     {

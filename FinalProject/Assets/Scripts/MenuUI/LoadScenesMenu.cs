@@ -29,5 +29,9 @@ public class LoadScenesMenu : MonoBehaviour
 
     }
 
+    public void LosdScene(string sceneName)
+    {
+        _gameStateMachine.LoadSceneStart(sceneName);
 
+    }
 }

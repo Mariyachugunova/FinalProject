@@ -1,34 +1,28 @@
 using DG.Tweening;
-using Sirenix.OdinInspector;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.UI;
+using Zenject;
 
 public class MovementController : MonoBehaviour
 {
     [SerializeField] private PathPoint _currentPathPoint;
     [SerializeField] private Animator _animator;
     [SerializeField] private Transform _dialogPoint;
-    //[Inject]
-    [SerializeField] private DialoguePanel _dialoguePanel;
-    private PathPoint[] _allPoints;
-    private float moveSpeed = 3;
 
     public event Action<float> playerTurn;
     public event Action ReachPlace;
-
-    private void Start()
+    private float _moveSpeedDOTwin = 3;
+    private float _moveSpeedVector3 = 0.026f;
+    
+    private bool _keyboarMove;
+    private Path _path;
+  
+    [Inject]
+    private void Construct(Path path)
     {
-        EventManager.ArrowClick += MoveTo;
-
-    }
-
-    private void OnDestroy()
-    {
-        EventManager.ArrowClick -= MoveTo;
+        _path = path;
     }
     public void FaceToX(float x)
     {
@@ -46,52 +40,64 @@ public class MovementController : MonoBehaviour
     }
 
 
-    private List<Vector3> _path;
+    private List<Vector3> _pathVectors;
     private PathPoint _targetPathPoint;
     private int _step = -1;
 
     private List<List<PathPoint>> _listOfPaths = new();
 
-   
+
     public void GoFromPointToPoint(PathPoint startPoint, PathPoint finishPont)
     {
-        if(_targetPathPoint != null)_targetPathPoint._inPlase = false;
-        _allPoints = FindObjectsOfType<PathPoint>();
+        StopMouseMove();
+        _keyboarMove = false;
+        if(_targetPathPoint != null) _targetPathPoint._inPlase = false;
         _currentPathPoint = startPoint;
         _targetPathPoint = finishPont;
         _listOfPaths.Clear();
-        ClearPath();
         PathFinder(_currentPathPoint, new());
-        int min = _listOfPaths.Min(_=>_.Count);
-        _path = _listOfPaths.Where(_ => _.Count == min).First().Select(e => e.transform.position).ToList();
+        //_listOfPaths.ForEach(l => { l.ForEach(p => print(p));print("-------------------------"); });
+        int min = _listOfPaths.Min(_ => _.Count);
+        _listOfPaths = _listOfPaths.Where(_ => _.Count == min).ToList();
+        float[] distance = new float[_listOfPaths.Count];
+        for(int i = 0; i < _listOfPaths.Count; i++)
+        {
+            for(int j = 0; j < _listOfPaths.Count - 1; j++)
+            {
+              distance[i] +=  Vector3.Distance(_listOfPaths[i][j].transform.position, _listOfPaths[i][j + 1].transform.position);
+            }
+        }
+        int n = 0;
+        for(int i = 0; i < distance.Length; i++)
+        {
+            if(distance[i] < distance[n]) n = i;
+        }
+        _pathVectors = _listOfPaths[n].Select(p => p.transform.position).ToList();
         _step = -1;
         Go();
 
     }
 
-    private void ClearPath()
-    {
-        for(int i = 0; i < _allPoints.Length; i++)
-        {
-            _allPoints[i]._check = false;
-        } 
-    }
+
+
     public void PathFinder(PathPoint pathPoint,List<PathPoint> list)
         {
 
         foreach(var item in pathPoint._derections) 
         {
             List<PathPoint> newlist = new(list);
-            newlist.Add(pathPoint);
-            if(pathPoint == _targetPathPoint)
+            if(!newlist.Contains(pathPoint))
+            {
+                newlist.Add(pathPoint);
+            }
+                if(pathPoint == _targetPathPoint)
             {
                 _listOfPaths.Add(newlist);
                 return;
             }
 
-            pathPoint._check = true;
-            if(!item.Value._check)
-            {                
+            if(!newlist.Contains(item.Value)){
+                newlist.Add(item.Value);
                 PathFinder(item.Value, newlist);               
             }
         }
@@ -99,55 +105,169 @@ public class MovementController : MonoBehaviour
     }
     public void Go()
     {
-        if(_step < _path.Count - 1)
+        if(_step < _pathVectors.Count - 1)
         {
             _step++;
             
-            FaceToX(_path[_step].x);
-            transform.DOMove(_path[_step], moveSpeed).SetSpeedBased().SetEase(Ease.Linear).onComplete = Go;
+            FaceToX(_pathVectors[_step].x);
+            transform.DOMove(_pathVectors[_step], _moveSpeedDOTwin).SetSpeedBased().SetEase(Ease.Linear).onComplete = Go;
             _animator.SetBool("go", true);
 
         }
         else
         {
             InPlace();
-
         }
     }
 
     private void InPlace()
     {
-        _animator.SetBool("go", false);
-        _targetPathPoint._inPlase = true;
-        ReachPlace?.Invoke();
+         _animator.SetBool("go", false);
+         _targetPathPoint._inPlase = true;
+         ReachPlace?.Invoke();
     }
-
-
-    public void MoveTo(Direction direction)
+    public void StartKeyboardMove()
     {
-       
+        if(!_keyboarMove)
+        {
+            if(DOTween.IsTweening(transform))
+            {
+                DOTween.Kill(transform);
+               
+            }
+            if(_targetPathPoint) _targetPathPoint._inPlase = false;
+            if(_currentPathPoint) _currentPathPoint._inPlase = false;
+
+            _path.RemoveWanderingPoints();
+            _animator.SetBool("go", true);
+            _keyboarMove = true;
+        }
     }
-
-    [Button]
-    public void MoveLeft( )
+    public void StopMouseMove()
     {
-      
+        if(DOTween.IsTweening(transform) && _animator.GetBool("go"))
+        {
+            DOTween.Kill(transform);
+            _targetPathPoint._inPlase = false; 
+            _animator.SetBool("go", false);
+          
+        }
+    }
+    public void StopKeyboardMove()
+    {
+        if(_keyboarMove)
+        {
+            _keyboarMove = false;
+            _animator.SetBool("go", false);
+        }
     }
    
-    [Button]
-    public void MoveRight()
+    public void MoveTo(Direction direction)
     {
-       
- 
+        StartKeyboardMove();
+        bool betwen2 = false;
+        foreach(var item in _path.GetComponentsInChildren<PathPoint>())
+        {
+            item.GetComponent<SpriteRenderer>().color = Color.white;
+        }
+        Dictionary<Direction,PathPoint> openWays;
+        if(Vector3.Distance(transform.position, _currentPathPoint.transform.position) < 0.2f)
+        {
+            openWays = new(_currentPathPoint._derections);
+        }
+        else
+        {
+            openWays = new();            
+            for(int i = 0; i < _currentPathPoint._derections.Values.Count; i++)
+            {
+                Vector3 p = transform.position;
+                Vector3 p1 = _currentPathPoint.transform.position;
+                Vector3 p2 = _currentPathPoint._derections.Values.ToArray()[i].transform.position;
+                PathPoint pp = _currentPathPoint._derections.Values.ToArray()[i];
+                if(Mathf.Abs(Vector3.Distance(p, p1) + Vector3.Distance(p, p2) - Vector3.Distance(p1, p2)) < 0.1f)
+                {
+                    betwen2 = true;
+                    openWays.TryAdd(_currentPathPoint._derections.Keys.ToArray()[i], pp);
+                    openWays.TryAdd(pp._derections.FirstOrDefault(x => x.Value == _currentPathPoint).Key, _currentPathPoint);
+                }
+            }
+        }
+        if(openWays.ContainsKey(direction))
+        {          
+            GoTowards(openWays[direction]);
+        }
+        else if(openWays.Count == 2 && betwen2)
+        {
+            if(openWays.ContainsKey(Direction.right))
+                if(!openWays[Direction.right]._derections.ContainsKey(direction))
+                    openWays.Remove(Direction.right);
+            if(openWays.ContainsKey(Direction.left))
+                if(!openWays[Direction.left]._derections.ContainsKey(direction))
+                    openWays.Remove(Direction.left);
+            if(openWays.ContainsKey(Direction.down))
+                if(!openWays[Direction.down]._derections.ContainsKey(direction))
+                    openWays.Remove(Direction.down);
+            if(openWays.ContainsKey(Direction.up))
+                if(!openWays[Direction.up]._derections.ContainsKey(direction))
+                    openWays.Remove(Direction.up);
+            if(openWays.Count > 0)
+            { 
+                PathPoint nearestOpenWay = openWays[Nearest(openWays)];
+                if(nearestOpenWay._derections.ContainsKey(direction))
+                {
+                    GoTowards(nearestOpenWay);
+                }
+                else
+                {
+
+                    StopKeyboardMove();
+                }
+            }
+            else
+            {
+                StopKeyboardMove();
+            }
+           
+        }
+        else
+        {
+            StopKeyboardMove();
+        }
+        foreach(var item in openWays.Values)
+        {
+            item.GetComponent<SpriteRenderer>().color = Color.green;
+        }
     }
-    [Button]
-    public void MoveUp()
+
+    private void GoTowards(PathPoint openWay)
     {
-       
+        FaceToX(openWay.transform.position.x);
+        transform.position = Vector3.MoveTowards(transform.position, openWay.transform.position, _moveSpeedVector3);
+        if(Vector3.Distance(transform.position, openWay.transform.position) < 0.2f)
+        {
+            _currentPathPoint = openWay;
+        }
     }
-    [Button]
-    public void MoveDown()
+
+    private Direction Nearest(Dictionary<Direction, PathPoint> openWays) {
+        int n = 0;
+        for(int i = 0; i < openWays.Values.Count; i++)
+        {
+            if(Vector3.Distance(transform.position, openWays.Values.ToArray()[i].transform.position) < Vector3.Distance(transform.position, openWays.Values.ToArray()[n].transform.position))
+            {
+                n = i;
+            }
+        }
+        return openWays.Keys.ToArray()[n];
+    }
+
+    public void SetCurrentPathPoint(PathPoint pp)
     {
-      
+        _currentPathPoint = pp;
+    }
+
+    public bool CanGo() {
+
+        return _animator.GetCurrentAnimatorStateInfo(0).IsName("Idle")|| _animator.GetCurrentAnimatorStateInfo(0).IsName("Walk");
     }
 }

@@ -1,3 +1,5 @@
+using Sirenix.OdinInspector;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,16 +15,17 @@ public class Path : MonoBehaviour, IPointerClickHandler
     [SerializeField] private PathPoint wanderingPoint1;
     [SerializeField] private PathPoint wanderingPoint2;
     private MovementController _movementController;
+    private DialoguePanel _dialoguePanel;
     [Inject]
-    private void Construct(MovementController movementController)
+    private void Construct(MovementController movementController, DialoguePanel dialoguePanel)
     {
         _movementController = movementController;
+        _dialoguePanel = dialoguePanel;
     }
    
     private void Start()
     {
         _allPoints = GetComponentsInChildren<PathPoint>();
-        GetComponent<BoxCollider2D>().isTrigger = true;
     }
 
     private Vector3 Projection(Vector3 mousepos,out PathPoint point1, out PathPoint point2)
@@ -50,35 +53,75 @@ public class Path : MonoBehaviour, IPointerClickHandler
             }
         return nearestPoint;
     }
-    
-    public void OnPointerClick(PointerEventData eventData)
+    public PathPoint FindNearest(Vector3 mousepos)
     {
-      
-        PathPoint point1;
-        PathPoint point2;
+        float mindist = float.MaxValue;
+        PathPoint nearestPoint = _allPoints[0];
+        for(int i = 0; i < _allPoints.Length; i++){           
+            float dist = Vector3.Distance(mousepos, _allPoints[i].transform.position);
+            if(dist < mindist)
+            {
+                mindist = dist;
+                nearestPoint = _allPoints[i];
+            }
+        }
+        return nearestPoint;
+    }
+
+    public void RemoveWanderingPoints()
+    {
         RemovePointFromPath(wanderingPoint1);
         RemovePointFromPath(wanderingPoint2);
-        
-        Vector3 startPoint = Projection(_movementController.transform.position, out point1, out point2); 
-        AddPointAtPath(startPoint, wanderingPoint1, point1, point2);
+        PathPoint point1;
+        PathPoint point2;
+        Projection(_movementController.transform.position, out point1, out point2);
+        _movementController.SetCurrentPathPoint(Vector3.Distance(_movementController.transform.position, point1.transform.position)< Vector3.Distance(_movementController.transform.position, point2.transform.position)?point1:point2);
+    }
+    public void OnPointerClick(PointerEventData eventData)
+    {
 
+        PathPoint point1;
+        PathPoint point2;
+        RemoveWanderingPoints();
+
+
+        Vector3 startPoint = Projection(_movementController.transform.position, out point1, out point2);
+        
+        if(point1 != null && point2 != null)
+        {
+            AddPointAtPath(startPoint, wanderingPoint1, point1, point2);
+        }
         Vector3 mousePoint = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
         Vector3 finishPoint = Projection(mousePoint,out point1, out point2);
+
+        if(point1 != null && point2 != null)
+        {
+            AddPointAtPath(finishPoint, wanderingPoint2, point1, point2);
+            _dialoguePanel.CurrentDialog.ClearDialogData();
+        }
+        PathPoint pp1 = FindNearest(_movementController.transform.position);
+        PathPoint pp2 = FindNearest(mousePoint);
+        if(wanderingPoint1.transform.parent != null) 
+            pp1 = wanderingPoint1;
+        if(wanderingPoint2.transform.parent != null)
+            pp2 = wanderingPoint2;
+        _movementController.GoFromPointToPoint(pp1, pp2);
+
         _arrow.transform.position = finishPoint;
         _arrow.gameObject.SetActive(true);
-        
-        
-        AddPointAtPath(finishPoint, wanderingPoint2, point1, point2);
-       _movementController.GoFromPointToPoint(wanderingPoint1, wanderingPoint2);
-
     }
+
+    internal void HideArrow()
+    {
+        _arrow.gameObject.SetActive(false);
+    }
+
     public void GoToPoint(PathPoint targetPoint)
     {
 
         PathPoint point1;
         PathPoint point2;
-        RemovePointFromPath(wanderingPoint1);
-        RemovePointFromPath(wanderingPoint2);
+        RemoveWanderingPoints();
 
         Vector3 startPoint = Projection(_movementController.transform.position, out point1, out point2);
         AddPointAtPath(startPoint, wanderingPoint1, point1, point2);
@@ -95,7 +138,8 @@ public class Path : MonoBehaviour, IPointerClickHandler
         if(point._derections.Count == 2)
         {
             PathPoint[] pathPoints =  point._derections.Values.ToArray();
-            PathPoint.Direction key1 = PathPoint.Direction.left;
+            point._derections.Clear();
+            Direction key1 = Direction.left;
             foreach(var item in pathPoints[0]._derections)
             {
                 if(item.Value == point)
@@ -125,8 +169,8 @@ public class Path : MonoBehaviour, IPointerClickHandler
     {
         point0.transform.position = pos;
 
-        PathPoint.Direction key1 = PathPoint.Direction.left;
-        PathPoint.Direction key2 = PathPoint.Direction.right;
+        Direction key1 = Direction.left;
+        Direction key2 = Direction.right;
         foreach(var item in point1._derections)
         {
             if(item.Value == point2)
@@ -150,4 +194,8 @@ public class Path : MonoBehaviour, IPointerClickHandler
         point0._derections.Add(key2, point1); 
         point0.transform.SetParent(transform);
     }
+
+
+
+
 }
